@@ -1,0 +1,105 @@
+/* Design tokens, reset and control primitives. Colour pairs are written with
+   light-dark(); the app switches schemes by setting `color-scheme` on <html>,
+   so there is no second stylesheet and no class to toggle. */
+
+html {
+  color-scheme: light dark;
+}
+
+:root {
+  --bg: light-dark(#f5f6f9, #0e1016);
+  --panel: light-dark(#ffffff, #161a23);
+  --panel-alt: light-dark(#f0f2f6, #1d222d);
+  --line: light-dark(#dfe3ea, #272d3a);
+  --ink: light-dark(#151a24, #e7e9ee);
+  --muted: light-dark(#5a6376, #8d95a8);
+  --accent: light-dark(#1c5fd0, #6ea8ff);
+  --ok: light-dark(#0f7038, #6fcf8b);
+  --warn: light-dark(#8a5300, #d8a657);
+  --bad: light-dark(#b02a20, #e8686f);
+  --bot: light-dark(#7a4fbf, #b18cf0);
+  --radius: 0.6rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font:
+    16px/1.5 system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+a {
+  color: var(--accent);
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border-radius: 0.4rem;
+  border: 1px solid var(--line);
+  background: var(--panel-alt);
+  padding: 0.35rem 0.8rem;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: light-dark(#ffffff, #0e1016);
+  font-weight: 600;
+}
+
+button.ghost {
+  background: none;
+}
+
+button.link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+select {
+  padding: 0.3rem 0.4rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--line);
+  background: var(--panel-alt);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Available to assistive technology, invisible on screen. */
+.sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
