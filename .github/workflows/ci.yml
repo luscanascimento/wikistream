@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Angular 22's CLI refuses older 22.x releases.
+          node-version: 22.22.3
+          cache: npm
+
+      - run: npm ci
+
+      # Runs against the recorded NDJSON fixture, so no network and no browser.
+      - run: npm test
+
+      - run: npm run build
