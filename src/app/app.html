@@ -1,0 +1,330 @@
+@let m = feed.metrics();
+@let status = stream.status();
+
+<div class="shell">
+  <header class="top">
+    <div>
+      <h1>WikiStream</h1>
+      <p class="sub">
+        Every edit, page creation and log action across Wikimedia, live off the
+        <a href="https://stream.wikimedia.org/v2/stream/recentchange">EventStreams firehose</a>.
+      </p>
+    </div>
+    <button class="ghost" type="button" (click)="cycleTheme()">{{ themeLabel() }}</button>
+  </header>
+
+  <section class="connection" [attr.data-status]="status">
+    <span class="dot" aria-hidden="true"></span>
+    <span role="status" class="state">
+      @switch (status) {
+        @case ('connecting') {
+          Connecting to the stream…
+        }
+        @case ('live') {
+          Live
+        }
+        @case ('reconnecting') {
+          Connection lost — retry #{{ stream.attempt() }}, backing off
+        }
+        @case ('failed') {
+          Disconnected after {{ stream.attempt() }} attempts
+        }
+      }
+    </span>
+    <span class="wire">
+      {{ m.wireTotal | number }} events off the wire
+      @if (stream.malformed() > 0) {
+        · {{ stream.malformed() | number }} unparseable
+      }
+    </span>
+    @if (status === 'failed') {
+      <button class="ghost" type="button" (click)="stream.restart()">Reconnect</button>
+    }
+  </section>
+
+  <h2 class="sr-only">Pipeline instrumentation</h2>
+  <dl class="strip">
+    <div class="tile">
+      <dt>Ingested / s</dt>
+      <dd>
+        <span class="value">{{ m.ingestedPerSec | number: '1.0-0' }}</span>
+        <span class="hint">arriving at the pipeline</span>
+      </dd>
+    </div>
+    <div class="tile">
+      <dt>Rendered / s</dt>
+      <dd>
+        <span class="value">{{ m.renderedPerSec | number: '1.0-0' }}</span>
+        <span class="hint">reaching the feed</span>
+      </dd>
+    </div>
+    <div class="tile">
+      <dt>Renders / s</dt>
+      <dd>
+        <span class="value">{{ m.rendersPerSec | number: '1.0-0' }}</span>
+        <span class="hint">change detection passes</span>
+      </dd>
+    </div>
+    <div class="tile" [class.hot]="m.cpuMsPerSec > 100" [class.warn]="m.cpuMsPerSec > 25">
+      <dt>Pipeline CPU</dt>
+      <dd>
+        <span class="value">
+          {{ m.cpuMsPerSec | number: '1.0-0' }}<span class="unit">ms/s</span>
+        </span>
+        <span class="hint">main thread, buffer to view</span>
+      </dd>
+    </div>
+    <div class="tile" [class.warn]="m.retained > retain">
+      <dt>Retained</dt>
+      <dd>
+        <span class="value">{{ m.retained | number }}</span>
+        <span class="hint">rows held in memory</span>
+      </dd>
+    </div>
+    <div class="tile" [class.warn]="m.dropped > 0">
+      <dt>Dropped</dt>
+      <dd>
+        <span class="value">{{ m.dropped | number }}</span>
+        <span class="hint">ingested, never shown</span>
+      </dd>
+    </div>
+    <div class="tile">
+      <dt>Buffer peak</dt>
+      <dd>
+        <span class="value">{{ m.bufferPeak | number }}</span>
+        <span
+          class="meter"
+          role="meter"
+          aria-label="Buffer occupancy"
+          [attr.aria-valuenow]="m.bufferPeak"
+          [attr.aria-valuemin]="0"
+          [attr.aria-valuemax]="pendingMax"
+        >
+          <span [style.inline-size.%]="(m.bufferPeak / pendingMax) * 100"></span>
+        </span>
+        <span class="hint">of {{ pendingMax | number }} slots</span>
+      </dd>
+    </div>
+    <div class="tile" [class.hot]="m.frameWorstMs > 50">
+      <dt>Frame</dt>
+      <dd>
+        <span class="value">
+          {{ m.frameAvgMs | number: '1.1-1' }}<span class="unit">ms</span>
+        </span>
+        <span class="hint">worst {{ m.frameWorstMs | number: '1.0-0' }}ms in window</span>
+      </dd>
+    </div>
+  </dl>
+
+  <section class="controls" aria-label="Pipeline controls">
+    <button
+      class="primary"
+      type="button"
+      (click)="togglePause()"
+      [attr.aria-pressed]="feed.paused()"
+    >
+      {{ feed.paused() ? 'Resume' : 'Pause' }}
+    </button>
+
+    <label class="check">
+      <input
+        type="checkbox"
+        [checked]="feed.backpressure()"
+        (change)="setBackpressure($event)"
+        aria-describedby="bp-help"
+      />
+      <span>Backpressure</span>
+    </label>
+    <span id="bp-help" class="sr-only">
+      When on, events are buffered and flushed once per animation frame. When off, every event
+      writes to the view immediately.
+    </span>
+
+    <span class="group">
+      <label for="stress">Synthetic load</label>
+      <select id="stress" (change)="setStress($event)">
+        @for (step of stressSteps; track step) {
+          <option [value]="step" [selected]="feed.stress() === step">×{{ step }}</option>
+        }
+      </select>
+    </span>
+
+    <span class="group">
+      <label for="wiki">Wiki</label>
+      <select id="wiki" (change)="setWiki($event)">
+        <option value="" [selected]="feed.wiki() === ''">All wikis</option>
+        @for (option of wikiOptions(); track option) {
+          <option [value]="option" [selected]="feed.wiki() === option">{{ option }}</option>
+        }
+      </select>
+    </span>
+
+    <fieldset class="agents">
+      <legend>Author</legend>
+      @for (option of agentOptions; track option) {
+        <label>
+          <input
+            type="radio"
+            name="agents"
+            [value]="option"
+            [checked]="feed.agents() === option"
+            (change)="setAgents(option)"
+          />
+          <span>{{ option }}</span>
+        </label>
+      }
+    </fieldset>
+  </section>
+
+  @if (!feed.backpressure()) {
+    <p class="callout" role="status">
+      Backpressure is off: every event writes the whole list on arrival and nothing is evicted at
+      {{ retain | number }} rows. Renders stay coalesced — the browser will not paint faster than
+      the display — so what climbs is <strong>Pipeline CPU</strong>, <strong>Retained</strong> and,
+      once the list is deep enough, <strong>Frame</strong>. Raise the synthetic load to see it.
+    </p>
+  }
+  @if (feed.paused() && feed.backpressure()) {
+    <p class="callout" role="status">
+      Paused. Events keep arriving and filling the buffer; once it is full the oldest are dropped.
+    </p>
+  }
+
+  <div class="panes">
+    <section class="feed">
+      <h2>
+        Live feed
+        <span class="muted">newest first, {{ retain | number }} rows retained</span>
+      </h2>
+
+      @if (status === 'failed') {
+        <p class="empty">
+          The stream is disconnected, so nothing is arriving. Use Reconnect above to start over.
+        </p>
+      } @else if (feed.visible().length === 0) {
+        <p class="empty">
+          @if (feed.filtered()) {
+            No retained event matches this filter yet.
+            <button class="link" type="button" (click)="clearFilters()">Clear filters</button>
+          } @else {
+            Waiting for the first event…
+          }
+        </p>
+      } @else {
+        <cdk-virtual-scroll-viewport itemSize="58" tabindex="0" class="viewport">
+          <ul>
+            <li *cdkVirtualFor="let item of feed.visible(); trackBy: trackSeq" class="row">
+              <span class="badge" [attr.data-type]="item.type">{{ item.type }}</span>
+              <span class="title" [title]="item.title">{{ item.title }}</span>
+              <span
+                class="delta"
+                [class.up]="item.delta > 0"
+                [class.down]="item.delta < 0"
+                [attr.aria-label]="item.delta + ' bytes'"
+              >
+                @if (item.delta !== 0) {
+                  {{ item.delta > 0 ? '+' : '' }}{{ item.delta | number }}
+                }
+              </span>
+              <span class="who">
+                {{ item.wiki }} ·
+                <span [class.bot]="item.bot">{{ item.user }}</span>
+                @if (item.bot) {
+                  <span class="chip">bot</span>
+                }
+              </span>
+              <time class="at" [attr.datetime]="item.t | date: 'yyyy-MM-ddTHH:mm:ssZZZZZ'">
+                {{ item.t | date: 'HH:mm:ss' }}
+              </time>
+            </li>
+          </ul>
+        </cdk-virtual-scroll-viewport>
+      }
+    </section>
+
+    <aside class="aggregates">
+      <h2>Aggregates <span class="muted">computed off the main thread</span></h2>
+
+      @if (feed.stats(); as stats) {
+        <section>
+          <h3>
+            Rate <span class="muted">{{ stats.ratePerSec | number: '1.0-1' }} events/s</span>
+          </h3>
+          <svg class="spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true">
+            <polyline [attr.points]="spark()" />
+          </svg>
+          <p class="hint">last 60 seconds, including synthetic copies</p>
+        </section>
+
+        <section>
+          <h3>Bots vs humans</h3>
+          <div
+            class="split"
+            role="img"
+            [attr.aria-label]="(botShare() | number: '1.0-0') + '% of events are from bots'"
+          >
+            <span class="bots" [style.inline-size.%]="botShare()"></span>
+          </div>
+          <p class="legend">
+            <span><i class="swatch bots"></i>{{ stats.bots | number }} bot</span>
+            <span><i class="swatch humans"></i>{{ stats.humans | number }} human</span>
+          </p>
+        </section>
+
+        <section>
+          <h3>Top wikis</h3>
+          <ul class="bars">
+            @for (bar of wikiBars(); track bar.key) {
+              <li>
+                <span class="k">{{ bar.key }}</span>
+                <span class="track"><span [style.inline-size.%]="bar.pct"></span></span>
+                <span class="v">{{ bar.count | number }}</span>
+              </li>
+            }
+          </ul>
+        </section>
+
+        <section>
+          <h3>Edit size</h3>
+          <ul class="bars">
+            @for (bar of sizeBars(); track bar.label) {
+              <li>
+                <span class="k">{{ bar.label }}</span>
+                <span class="track"><span [style.inline-size.%]="bar.pct"></span></span>
+                <span class="v">{{ bar.count | number }}</span>
+              </li>
+            }
+          </ul>
+        </section>
+
+        <section>
+          <h3>Busiest pages</h3>
+          <ol class="pages">
+            @for (page of stats.topPages; track page.key) {
+              <li>
+                <span class="k">{{ page.key }}</span
+                ><span class="v">{{ page.count }}</span>
+              </li>
+            } @empty {
+              <li class="muted">Nothing yet.</li>
+            }
+          </ol>
+        </section>
+      } @else {
+        <p class="empty">Waiting for the worker's first snapshot…</p>
+      }
+    </aside>
+  </div>
+
+  <footer>
+    <p>
+      Aggregation runs in a Web Worker; the main thread only paints. Synthetic load duplicates each
+      real event N times in the browser — it raises the rate the pipeline has to survive, it does
+      not invent Wikimedia traffic.
+    </p>
+    <p>
+      No geolocation is shown: the <code>recentchange</code> schema does not carry any, and guessing
+      a country from a wiki's language would be a fabrication.
+    </p>
+  </footer>
+</div>
