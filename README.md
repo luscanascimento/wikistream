@@ -17,8 +17,9 @@ events in per second, rows rendered per second, change detection passes per
 second, main-thread milliseconds burnt per second, rows retained, events dropped,
 peak buffer depth, mean and worst frame. Every number is measured — render passes
 come from Angular's `afterEveryRender` hook, frame times from
-`requestAnimationFrame` deltas. Two switches, **synthetic load** (×1 to ×250) and
-**backpressure**, let you push the pipeline and watch it hold.
+`requestAnimationFrame` deltas. Two controls, a **synthetic load** multiplier
+(×1, ×10, ×50, ×100, ×250) and a **backpressure** switch, let you push the
+pipeline and watch it hold.
 
 ## Backpressure
 
@@ -94,8 +95,12 @@ multiplier — so the CPU and frame columns are the comparison.
 
 ## Dropping is the answer
 
-The buffer between frames holds 1 000 events and the feed retains 500 rows. Both
-overwrite the oldest when full, and both drops are counted on screen.
+The buffer between frames holds 1 000 events and the feed retains 500 rows. The
+buffer overwrites its oldest entry when it is full; a flush carrying more than
+500 rows loses the surplus to the retention cap. Both losses are events that were
+ingested and never appeared, and both are counted on the **Dropped** tile — which
+means exactly that and nothing looser. Rows that were displayed and then aged out
+past 500 are not in the count; they had their turn.
 
 Nobody can slow Wikipedia down. There is no credit window to withhold and no
 consumer offset to rewind, so the only lever left is which end loses data when
@@ -130,7 +135,9 @@ refreshing.)
 Covered: the ring buffer, including overflow, drop accounting and peak tracking;
 the flush cadence, driven by a fake animation-frame clock, asserting on signal
 identity that a batch of 50 events produces exactly zero writes before the frame
-and exactly one after it; every aggregation function against the recorded data,
+and exactly one after it; the drop accounting on both sides of the retention cap —
+what a flush had to cut is counted, what merely aged out is not; every
+aggregation function against the recorded data,
 including that the result does not depend on how the stream was cut into batches;
 the backoff curve and its jitter floor; and the payload shape check against all
 300 real events.
@@ -168,3 +175,7 @@ npm run build    # production bundle into dist/
 
 Angular 22 (standalone, zoneless, signals), Angular CDK virtual scrolling,
 TypeScript 6 strict, a Web Worker for aggregation, SCSS, Vitest.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
