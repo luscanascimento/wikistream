@@ -4,7 +4,7 @@ import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core'
 const ENDPOINT = 'https://stream.wikimedia.org/v2/stream/recentchange';
 
 /** Give up after this many consecutive failed connection attempts. */
-const MAX_ATTEMPTS = 8;
+export const MAX_ATTEMPTS = 8;
 
 export type StreamStatus = 'connecting' | 'live' | 'reconnecting' | 'failed';
 

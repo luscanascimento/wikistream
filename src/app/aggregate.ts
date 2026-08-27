@@ -54,7 +54,7 @@ export const RATE_MEAN_SEC = 5;
 /**
  * Page titles are unbounded — every distinct page seen is a new key. Prune back
  * to the heaviest hitters once the table gets big.
- * ponytail: keeping the top N after a sort is a biased approximation (a page
+ * Keeping the top N after a sort is a biased approximation (a page
  * that trickles in below the cut is forgotten and starts from zero). Fine for a
  * "what is hot right now" panel; swap in space-saving/count-min if it ever has
  * to be defensible under adversarial cardinality.

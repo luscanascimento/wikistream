@@ -234,7 +234,7 @@ export class Feed {
     const started = performance.now();
     const batch = this.pending.drain().reverse();
     this.renderedTotal += batch.length;
-    // ponytail: copy-and-cap instead of head/tail index arithmetic. At most one
+    // Copy-and-cap instead of head/tail index arithmetic. At most one
     // copy of a 500-element array per frame; the index version is the same
     // bound with more ways to be wrong.
     this._items.update((items) => [...batch, ...items].slice(0, RETAIN));
