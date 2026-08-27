@@ -133,11 +133,25 @@ describe('Feed flush cadence', () => {
     // Metrics publish on a 200 ms cadence, so give the panel a chance to update.
     frames(16);
 
-    // The 25 oldest never made it: the buffer holds PENDING_MAX and the feed
-    // then keeps the newest RETAIN of those.
-    expect(feed.metrics().dropped).toBe(25);
+    // Two losses, both counted: the 25 oldest the buffer overwrote, and the
+    // PENDING_MAX - RETAIN events the flush had to cut to honour the cap.
+    // Neither group was ever on screen, so neither may read as rendered.
+    expect(feed.metrics().dropped).toBe(25 + PENDING_MAX - RETAIN);
     expect(feed.items()).toHaveLength(RETAIN);
     expect(feed.items()[RETAIN - 1].seq).toBe(PENDING_MAX + 25 - RETAIN);
+  });
+
+  it('does not count rows that were displayed and then aged out as dropped', () => {
+    // Every batch fits under RETAIN, so nothing is lost before it is seen even
+    // though the total far exceeds the cap and old rows are evicted.
+    for (let i = 0; i < 10; i++) {
+      stream.emit(100, i * 100);
+      frames(1);
+    }
+    frames(16);
+
+    expect(feed.items()).toHaveLength(RETAIN);
+    expect(feed.metrics().dropped).toBe(0);
   });
 
   it('freezes the feed while paused and keeps counting what it loses', () => {

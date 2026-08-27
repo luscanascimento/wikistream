@@ -57,7 +57,11 @@ export interface Metrics {
   readonly cpuMsPerSec: number;
   /** Rows currently held in memory. */
   readonly retained: number;
-  /** Events ingested but never shown, because the buffer was full or paused. */
+  /**
+   * Events ingested that never reached the view: overwritten in the buffer,
+   * discarded while paused, or past {@link RETAIN} in a single flush. Rows that
+   * were displayed and then aged out are not counted here — they were shown.
+   */
   readonly dropped: number;
   /** Deepest the between-frames buffer got during the sample window. */
   readonly bufferPeak: number;
@@ -129,7 +133,10 @@ export class Feed {
 
   private ingested = 0;
   private renderedTotal = 0;
-  /** Drops the buffer cannot account for: events discarded while paused. */
+  /**
+   * Drops the ring buffer cannot account for: events discarded while paused,
+   * and the surplus of a flush that carried more than RETAIN rows.
+   */
   private droppedTotal = 0;
   private renders = 0;
   /** Main-thread milliseconds spent inside the pipeline since page load. */
@@ -233,7 +240,12 @@ export class Feed {
     if (this.pending.size === 0 || this.paused()) return;
     const started = performance.now();
     const batch = this.pending.drain().reverse();
-    this.renderedTotal += batch.length;
+    // A batch bigger than RETAIN loses its own tail to the cap below: those
+    // events are ingested and never shown, so they are drops, not renders.
+    // Ordinary eviction of already-displayed rows is not counted.
+    const shown = Math.min(batch.length, RETAIN);
+    this.renderedTotal += shown;
+    this.droppedTotal += batch.length - shown;
     // Copy-and-cap instead of head/tail index arithmetic. At most one
     // copy of a 500-element array per frame; the index version is the same
     // bound with more ways to be wrong.
